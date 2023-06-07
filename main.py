@@ -7,7 +7,7 @@ import soundfile as sf
 import PySimpleGUI as sg
 
 #音声ファイルパス
-on_audio_path = r'C:\Users\vecto\Desktop\python\music_data\みきとP 『 少女レイ 』 MV .wav'
+on_audio_path = r'C:\Users\vecto\Desktop\python\music_data\少女レイ ver.EMA.wav'
 off_audio_path = r'C:\Users\vecto\Desktop\python\music_data\Shoujorei_offvocal_[Master].wav'
 
 #音声データ読み込み
@@ -54,12 +54,15 @@ while True:
 
         #ボリューム
         for t in range(int(values['base'])-int(values['range_volume']),int(values['base'])+int(values['range_volume'])+1):
-            audio_sum += on_audio_data[t] + inverted_off_audio_data[t] * 0.1
+            audio_sum += np.abs(on_audio_data[t] + inverted_off_audio_data[t] * 0.1)
         for volume_rate in range(2,21):
             volume_rate = volume_rate / 10
+            audio_test = 0
             for t in range(int(values['base'])-int(values['range_volume']),int(values['base'])+int(values['range_volume'])+1):
-                audio_test += on_audio_data[t] + inverted_off_audio_data[t] * volume_rate
+                audio_test += np.abs(on_audio_data[t] + (inverted_off_audio_data[t] * volume_rate))
+                
             if audio_sum > audio_test:
+                #print('ifcheck')
                 audio_sum = audio_test
                 volume_rate_c = volume_rate
 
@@ -86,4 +89,7 @@ while True:
             print('ok')
         if len(on_audio_data) == len(inverted_off_audio_data):
             print('okdesu')
+        print(volume_rate_c)
         break
+
+        
