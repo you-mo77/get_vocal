@@ -3,53 +3,84 @@ import librosa
 import librosa.display
 import matplotlib.pyplot as plt
 import sounddevice as sd
+import soundfile as sf
+import PySimpleGUI as sg
 
-#音声ファイルのパス(相対)
-audio_file_path = r'C:\Users\vecto\Desktop\python\get_vocal\少女レイ  MORE MORE JUMP  初音ミク_320kbps.mp3'
-audio_file_path_offvo = r'C:\Users\vecto\Desktop\python\get_vocal\Shoujorei_offvocal_[Master].wav'
+#音声ファイルパス
+on_audio_path = r'C:\Users\vecto\Desktop\python\music_data\みきとP 『 少女レイ 』 MV .wav'
+off_audio_path = r'C:\Users\vecto\Desktop\python\music_data\Shoujorei_offvocal_[Master].wav'
 
 #音声データ読み込み
-audio_data,sample_rate = librosa.load(audio_file_path)
-audio_data_offvo,sample_offvo = librosa.load(audio_file_path_offvo)
-
-#位相反転
-inverted_audio_data_offvo = audio_data_offvo * (-1)
-
-#波形チェック　終わり次第コメントアウト
-off_time = np.arange(0,len(audio_data_offvo))/sample_offvo
-#check_data = audio_data_offvo + inverted_audio_data_offvo
-#plt.plot(off_time,check_data)
-
-#plt.show()
-
-#オフセットチェック
+on_audio_data,on_sample_rate = librosa.load(on_audio_path)
+off_audio_data,off_sample_rate = librosa.load(off_audio_path)
+                                       
+#調整用変数
 offset = 0
+audio_sum = 0
+audio_test = 0
+volume_rate_c = 0.1
 
-cross_correlation_coefficient = np.correlate(audio_data,audio_data_offvo,mode='valid')
-        
-offset = np.argmax(cross_correlation_coefficient)
-
-#再生関数
-def play(sampling_rate,audio_data):
-    sd.play(audio_data,sampling_rate)
-    sd.wait()
-
-
-#ボーカル抽出
-if len(audio_data)<len(audio_data_offvo):
-    smaller_data = audio_data
-    greater_data = audio_data_offvo
+#音声長２
+length = min(len(on_audio_data),len(off_audio_data))
+if(len(on_audio_data)<len(off_audio_data)):
+    off_audio_data = off_audio_data[:length]
 else:
-    smaller_data = audio_data_offvo
-    greater_data = audio_data
+    on_audio_data = on_audio_data[:length]
 
-smaller_data = np.pad(smaller_data,(0,offset),mode='constant')
-shifted_smaller_data = np.roll(smaller_data,offset)
+#gui表示
+layout = [[sg.Text("set range for offset[sample]")],
+          [sg.Input(key = 'range_offset')],
+          [sg.Text("set base for volume[sample]")],
+          [sg.Input(key='base')],
+          [sg.Text("set range for volume[sample]")],
+          [sg.Input(key = 'range_volume')],
+          [sg.Button('Go')]]
 
-#無理やり合わせる
-n = abs(len(greater_data) - len(shifted_smaller_data))
-shifted_smaller_data = np.pad(shifted_smaller_data,(0,n),mode='constant')
+window = sg.Window('Get Vocal',layout)
+#event_loop
+while True:
+    event, values = window.read()
 
-out_data = shifted_smaller_data + greater_data
-play(sample_rate,out_data)
+    if event == 'Go':
+
+        #オフセット
+        on_audio_data = np.pad(on_audio_data,(values['range_offset'],values['range_offset']),mode = 'constant')
+        ccc = np.correlate(on_audio_data,off_audio_data,mode='valid')
+        offset = np.argmax(ccc)
+        off_audio_data = np.pad(off_audio_data,(offset,len(on_audio_data)-offset-len(off_audio_data)),mode = 'constant')
+
+        #位相反転
+        inverted_off_audio_data = off_audio_data * (-1)
+
+        #ボリューム
+        for t in range(values['base']-values['range_volume'],values['base']+values['range_volume']+1):
+            audio_sum += on_audio_data[t] + inverted_off_audio_data[t] * 0.1
+        for volume_rate in range(2,21):
+            volume_rate = volume_rate / 10
+            for t in range(values['base']-values['range_volume'],values['base']+values['range_volume']+1):
+                audio_test += on_audio_data[t] + inverted_off_audio_data[t] * volume_rate
+            if audio_sum > audio_test:
+                audio_sum = audio_test
+                volume_rate_c = volume_rate
+
+        #ボーカル抽出
+        sum_audio_data = on_audio_data + inverted_off_audio_data
+        sf.write('output.wav',sum_audio_data,on_sample_rate)
+
+        ###########以下デバッグ############
+        #位相反転チェック
+        #invertion_check_audio_data = inverted_off_audio_data + off_audio_data
+        #sf.write('invertion_check.wav',invertion_check_audio_data,off_sample_rate)
+
+        #データ出力
+        sf.write('inverted_off_audio_data.wav',inverted_off_audio_data,off_sample_rate)
+        sf.write('off_audio_data.wav',off_audio_data,off_sample_rate)
+        sf.write('on_audio_data.wav',on_audio_data,on_sample_rate)
+        print('ok6')
+        #音声長チェック
+        if len(on_audio_data) == len(off_audio_data):
+            print('ok')
+        if len(on_audio_data) == len(inverted_off_audio_data):
+            print('okdesu')
+        break
 
